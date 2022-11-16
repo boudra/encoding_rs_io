@@ -170,6 +170,12 @@ impl<R: io::Read> io::Read for BomPeeker<R> {
     }
 }
 
+impl<R: io::Read + io::Seek> io::Seek for BomPeeker<R> {
+    fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
+        self.rdr.seek(pos)
+    }
+}
+
 /// A PossibleBom is a sequence of bytes at the beginning of a stream that
 /// may represent an actual BOM. To detect the BOM, this must contain at
 /// least 3 bytes.

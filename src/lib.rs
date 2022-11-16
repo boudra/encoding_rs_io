@@ -391,6 +391,22 @@ impl<R: io::Read, B: AsMut<[u8]>> io::Read for DecodeReaderBytes<R, B> {
     }
 }
 
+impl<R: io::Read + io::Seek, B: AsMut<[u8]>> io::Seek
+    for DecodeReaderBytes<R, B>
+{
+    fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
+        self.tiny = TinyTranscoder::new();
+        self.decoder = self
+            .decoder
+            .as_ref()
+            .map(|e| e.encoding().new_decoder_with_bom_removal());
+        self.buflen = 0;
+        self.pos = 0;
+        self.exhausted = false;
+        self.rdr.seek(pos)
+    }
+}
+
 impl<R: io::Read> DecodeReaderBytes<R, Vec<u8>> {
     /// Create a new transcoder that converts a source stream to valid UTF-8
     /// via BOM sniffing.
@@ -580,6 +596,7 @@ impl<R: fmt::Debug, B: fmt::Debug> fmt::Debug for DecodeReaderBytes<R, B> {
 #[cfg(test)]
 mod tests {
     use std::io::Read;
+    use std::io::Seek;
 
     use encoding_rs::{self, Encoding};
 
@@ -848,11 +865,13 @@ mod tests {
         ($name:ident, $enc:expr, $srcbytes:expr, $dst:expr) => {
             #[test]
             fn $name() {
-                let srcbuf = &$srcbytes[..];
+                let srcbuf = std::io::Cursor::new(&$srcbytes[..]);
                 let enc = Encoding::for_label($enc.as_bytes());
                 let mut rdr = DecodeReaderBytesBuilder::new()
                     .encoding(enc)
-                    .build(&*srcbuf);
+                    .build(srcbuf);
+                assert_eq!($dst, read_to_string(&mut rdr));
+                rdr.seek(std::io::SeekFrom::Start(0)).unwrap();
                 assert_eq!($dst, read_to_string(&mut rdr));
             }
         };
